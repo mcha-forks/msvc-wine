@@ -44,9 +44,16 @@ if [ -n "$VC_ZIP" ]; then
     unzip "$VC_ZIP"
 fi
 ln_s "Windows Kits" kits
+ln_s "Microsoft SDKs" sdks
 ln_s VC vc
 ln_s Tools vc/tools
 ln_s MSVC vc/tools/msvc
+
+NETFXVER=$(basename $(echo kits/NETFXSDK/* | awk '{print $NF}'))
+echo Using NETFX version $NETFXVER
+
+NETFXSDKVER=$(basename $(echo sdks/Windows/v* | awk '{print $NF}'))
+echo Using NETFX SDK version $NETFXSDKVER
 
 for i in $(ls -r vc/tools/msvc); do
     dir="vc/tools/msvc/$i"
@@ -193,6 +200,8 @@ fi
 cat "$ORIG"/wrappers/msvcenv.sh \
 | sed 's/MSVCVER=.*/MSVCVER='$MSVCVER/ \
 | sed 's/SDKVER=.*/SDKVER='$SDKVER/ \
+| sed 's/NETFXVER=.*/NETFXVER='$NETFXVER/ \
+| sed 's/NETFXSDKVER=.*/NETFXSDKVER='$NETFXSDKVER/ \
 | sed s/x64/$host/ \
 | sed s/amd64/$dotnet_host/ \
 > msvcenv.sh

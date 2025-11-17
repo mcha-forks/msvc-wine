@@ -93,6 +93,8 @@ def getArgsParser():
     parser.add_argument("--with-dia", action=OptionalBoolean, help="Include DIA SDK (default)")
     parser.add_argument("--with-msbuild", action=OptionalBoolean, help="Include MSBuild (default)")
     parser.add_argument("--with-devcmd", action=OptionalBoolean, help="Include Visual Studio Developer Command Prompt (default)")
+    parser.add_argument("--with-netfx", action=OptionalBoolean, help="Include .NET Framework support")
+    parser.add_argument("--with-cli", action=OptionalBoolean, help="Include C++/CLI support")
     parser.add_argument("--with-wdk-installers", metavar="dir", help="Install Windows Driver Kit using the provided MSI installers")
     parser.add_argument("--host-arch", metavar="arch", choices=["x86", "x64", "arm64"], help="Specify the host architecture of packages to install")
     parser.add_argument("--only-host", default=True, action=OptionalBoolean, help="Only download packages that match host arch")
@@ -100,10 +102,10 @@ def getArgsParser():
     parser.add_argument("--language", metavar="xx[-YY]", default="en", help="Preferred language code for packages available in multiple languages (defaults to en)")
     return parser
 
-def appendPackageSelection(args, flag, package):
-    if flag == True:
+def appendPackageSelection(args, flag: "bool | None", package: "str"):
+    if flag is True:
         args.package.append(package)
-    elif flag == False:
+    elif flag is False:
         args.ignore.append(package)
 
 def setPackageSelectionMSVC16(args, packages, userversion, sdk, toolversion, defaultPackages, defaultIgnores):
@@ -120,7 +122,9 @@ def setPackageSelectionMSVC16(args, packages, userversion, sdk, toolversion, def
             appendPackageSelection(args, args.with_msvc, "Microsoft.VisualStudio.Component.VC." + toolversion + ".ARM64")
             appendPackageSelection(args, args.with_atl, "Microsoft.VisualStudio.Component.VC." + toolversion + ".ATL.ARM64")
 
-        if args.sdk_version == None:
+        appendPackageSelection(args, args.with_cli, "Microsoft.VisualStudio.Component.VC." + toolversion + ".CLI.Support")
+
+        if args.sdk_version is None:
             args.sdk_version = sdk
     else:
         # Options for toolchains for specific versions. The latest version in
@@ -133,7 +137,7 @@ def setPackageSelectionMSVC16(args, packages, userversion, sdk, toolversion, def
 def setPackageSelectionMSVC15(args, packages, userversion, sdk, toolversion, defaultPackages, defaultIgnores):
     if findPackage(packages, "Microsoft.VisualStudio.Component.VC.Tools." + toolversion, warn=False):
         appendPackageSelection(args, args.with_msvc, "Microsoft.VisualStudio.Component.VC.Tools." + toolversion)
-        if args.sdk_version == None:
+        if args.sdk_version is None:
             args.sdk_version = sdk
     else:
         # Options for toolchains for specific versions. The latest version in
@@ -192,6 +196,8 @@ def setPackageSelection(args, packages):
     if "arm64" in args.architecture:
         appendPackageSelection(args, args.with_msvc, "Microsoft.VisualStudio.Component.VC.Tools.ARM64")
         appendPackageSelection(args, args.with_atl, "Microsoft.VisualStudio.Component.VC.ATL.ARM64")
+
+    appendPackageSelection(args, args.with_cli, "Microsoft.VisualStudio.Component.VC.CLI.Support")
 
     defaultPackages, args.package = args.package, defaultPackages
     defaultIgnores, args.ignore = args.ignore, defaultIgnores
@@ -331,6 +337,7 @@ def setPackageSelection(args, packages):
     appendPackageSelection(args, args.with_msbuild, "Microsoft.Build.Dependencies")
     appendPackageSelection(args, args.with_devcmd, "Microsoft.VisualStudio.VC.vcvars")
     appendPackageSelection(args, args.with_devcmd, "Microsoft.VisualStudio.PackageGroup.VsDevCmd")
+    appendPackageSelection(args, args.with_netfx, "Microsoft.Net.4.8.SDK")
 
     if args.with_wdk_installers is not None:
         args.package.append("Component.Microsoft.Windows.DriverKit.BuildTools")
@@ -847,6 +854,26 @@ def unpackWin10WDK(src, dest):
         print("Moving", filename, "into version", wdkVersion);
         shutil.move(props, os.path.join(versionedPath, filename))
 
+def unpackNetfxSDK(src, dest):
+    if sys.platform != "win32" and not os.access(os.path.join(dest, "Program Files"), os.F_OK):
+        os.symlink(".", os.path.join(dest, "Program Files"), target_is_directory=True)
+
+    print("Unpacking NETFX SDK installers from", src)
+
+    for srcfile in glob.glob(src + "/sdk_tools*.msi"):
+        name = os.path.basename(srcfile)
+        print("Extracting", name)
+
+        if sys.platform == "win32":
+            # The path to TARGETDIR need to be quoted in the case of spaces.
+            cmd = "msiexec /a \"%s\" /qn TARGETDIR=\"%s\"" % (srcfile, os.path.abspath(dest))
+        else:
+            cmd = ["msiextract", "-C", dest, srcfile]
+
+        payloadName, _ = os.path.splitext(name)
+        with open(os.path.join(dest, "NETFXSDK-" + payloadName + "-listing.txt"), "w") as log:
+            subprocess.check_call(cmd, stdout=log)
+
 def extractPackages(selected, cache, dest):
     makedirs(dest)
     # The path name casing is not consistent across packages, or even within a single package.
@@ -864,6 +891,9 @@ def extractPackages(selected, cache, dest):
         elif p["id"].startswith("Win10SDK") or p["id"].startswith("Win11SDK"):
             print("Unpacking " + p["id"])
             unpackWin10SDK(dir, p["payloads"], dest)
+        elif p["id"].startswith("Microsoft.Net"):
+            print("Unpacking " + p["id"])
+            unpackNetfxSDK(dir, dest)
         else:
             print("Skipping unpacking of " + p["id"] + " of type " + type)
 
@@ -909,6 +939,7 @@ def moveVCSDK(unpack, dest):
     components = [
         "VC",
         "Windows Kits",
+        "Microsoft SDKs",
         # The DIA SDK isn't necessary for normal use, but can be used when e.g.
         # compiling LLVM.
         "DIA SDK",
