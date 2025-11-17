@@ -18,7 +18,7 @@ set -eu
 
 if [[ $# -lt 1 || "$1" == "-h" ]]; then
     echo Usage:
-    echo "   " $0 [--cache dir] url
+    echo "    $0 [--cache dir] url"
     echo
     echo Prints the downloaded WDK installers location to stdout.
     exit 0
@@ -46,4 +46,4 @@ WIN_CACHE_DIR=$("$WINE" winepath -w "$CACHE_DIR")
 
 WDK_INSTALLERS="${CACHE_DIR}/Installers"
 
-echo $WDK_INSTALLERS
+echo "$WDK_INSTALLERS"
