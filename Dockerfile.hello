@@ -1,12 +1,17 @@
 ARG BASE=msvc-wine
 FROM $BASE
 
+WORKDIR /app
+
 COPY test/hello.c ./
 
-RUN \
-    wineserver -p && \
-    $(command -v wine64 || command -v wine || false) wineboot && \
-    for arch in x86 x64 arm arm64; do \
-        [ ! -d /opt/msvc/kits/10/lib/*/um/$arch ] || \
-        /opt/msvc/bin/$arch/cl hello.c -Fehello-$arch.exe || exit 1; \
-    done
+RUN bash <<-'EOF'
+	set -eux
+	wineserver -p
+	wine64 wineboot
+	for arch in x86 x64 arm arm64; do
+		dirs=(/opt/msvc/kits/10/lib/*/um/$arch)
+		if [ ! -d "${dirs[0]}" ]; then continue; fi
+		"/opt/msvc/bin/$arch/cl" hello.c "-Fehello-$arch.exe"
+	done
+EOF
