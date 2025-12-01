@@ -1,6 +1,6 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
-# Copyright (c) 2019 Martin Storsjo
+# Copyright (c) 2018 Martin Storsjo
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -19,29 +19,31 @@
 # find headers and libraries installed by the other msvc-wine scripts.
 #
 # To use this script, execute it like this:
-#     BIN=<path-to-msvc-wine-install>/bin/x64 . ./msvcenv-native.sh
-# (Note the "." between the BIN variable and the msvcenv-native.sh script.)
+#     . <path-to-msvc-wine-install>/bin/x64/msvcenv-native.sh
 # After executing this, you should be able to run clang-cl and lld-link
 # without needing to configure paths manually anywhere.
 # (If linking by invoking clang or clang-cl, instead of directly calling
 # lld-link, it's recommended to use -fuse-ld=lld.)
 
-if [ -z "$BIN" ]; then
-    echo Set BIN to point to the directory before launching
-else
-    ENV="$BIN/msvcenv.sh"
-    if [ ! -f "$ENV" ]; then
-        echo $ENV doesn\'t exist
-    else
-        export INCLUDE="$(bash -c ". $ENV && /usr/bin/env echo \"\$INCLUDE\"" | sed s/z://g | sed 's/\\/\//g')"
-        export LIB="$(bash -c ". $ENV && /usr/bin/env echo \"\$LIB\"" | sed s/z://g | sed 's/\\/\//g')"
-        MSVCARCH="$(bash -c ". $ENV && /usr/bin/env echo \"\$ARCH\"")"
-        case $MSVCARCH in
-        x86) TARGET_ARCH=i686 ;;
-        x64) TARGET_ARCH=x86_64 ;;
-        arm) TARGET_ARCH=armv7 ;;
-        arm64) TARGET_ARCH=aarch64 ;;
-        esac
-        TARGET_TRIPLE=$TARGET_ARCH-windows-msvc
-    fi
+SDK=kits/10
+BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+# Support having the wrappers in a directory one or two levels below the
+# installation directory.
+if [ ! -d "$BASE/vc" ]; then
+    BASE=$(cd "$BASE"/.. && pwd)
 fi
+MSVCVER=14.13.26128
+SDKVER=10.0.16299.0
+NETFXVER=4.8
+NETFXSDKVER=v10.0A
+ARCH=x86
+MSVCBASE="$BASE/vc"
+SDKBASE="$BASE/$SDK"
+NETFXBASE="$BASE/kits/NETFXSDK/$NETFXVER"
+NETFXSDKBASE="$BASE/sdks/Windows/$NETFXSDKVER"
+MSVCDIR="$MSVCBASE/tools/msvc/$MSVCVER"
+SDKINCLUDE="$SDKBASE/include/$SDKVER"
+SDKLIB="$SDKBASE/lib/$SDKVER"
+export INCLUDE="$MSVCDIR/atlmfc/include;$MSVCDIR/include;$SDKINCLUDE/shared;$SDKINCLUDE/ucrt;$SDKINCLUDE/um;$SDKINCLUDE/winrt;$SDKINCLUDE/km;$NETFXBASE/include"
+export LIB="$MSVCDIR/atlmfc/lib/$ARCH;$MSVCDIR/lib/$ARCH;$SDKLIB/ucrt/$ARCH;$SDKLIB/um/$ARCH;$SDKLIB/km/$ARCH;$NETFXBASE/lib"
+export PATH="$BASE/bin/$ARCH:$PATH"

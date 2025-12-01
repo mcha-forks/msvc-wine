@@ -22,18 +22,25 @@ if [ -z "$BIN" ]; then
     exit 1
 fi
 
-BASE_UNIX=$(. "${BIN}msvcenv.sh" && echo $BASE_UNIX)
-TARGET_ARCH=$(. "${TESTS}../msvcenv-native.sh" && echo $TARGET_ARCH)
+BASE=$(. "${BIN}msvcenv-native.sh" && echo $BASE)
+ARCH=$(. "${BIN}msvcenv-native.sh" && echo $ARCH)
+case $ARCH in
+    x86) TARGET_ARCH=i686 ;;
+    x64) TARGET_ARCH=x86_64 ;;
+    arm) TARGET_ARCH=armv7 ;;
+    arm64) TARGET_ARCH=aarch64 ;;
+esac
+TARGET_TRIPLE=$TARGET_ARCH-windows-msvc
 
 # Since Clang 13, it's possible to point out the installed MSVC/WinSDK with
 # the /winsysroot parameter. LLD also provides the same parameter since
 # version 15. (For versions 13 and 14, this parameter can still be used
 # for linking, as long as linking is done via Clang.)
-EXEC "" clang-cl --target=$TARGET_ARCH-windows-msvc "${TESTS}hello.c" -Fehello.exe -winsysroot "$BASE_UNIX" -fuse-ld=lld
+EXEC "" clang-cl --target=$TARGET_ARCH-windows-msvc "${TESTS}hello.c" -Fehello.exe -winsysroot "$BASE" -fuse-ld=lld
 
 # Set up the INCLUDE/LIB env variables for compilation without directly
 # pointing at the installation.
-. ${TESTS}../msvcenv-native.sh
+. ${BIN}msvcenv-native.sh
 EXEC "" clang-cl --target=$TARGET_TRIPLE "${TESTS}hello.c" -c -Fohello.obj
 EXEC "" lld-link hello.obj -out:hello.exe
 

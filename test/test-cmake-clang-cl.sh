@@ -22,7 +22,15 @@ if [ -z "$BIN" ]; then
     exit 1
 fi
 
-. ${TESTS}/../msvcenv-native.sh
+BASE=$(. "${BIN}msvcenv-native.sh" && echo $BASE)
+ARCH=$(. "${BIN}msvcenv-native.sh" && echo $ARCH)
+case $ARCH in
+    x86) TARGET_ARCH=i686 ;;
+    x64) TARGET_ARCH=x86_64 ;;
+    arm) TARGET_ARCH=armv7 ;;
+    arm64) TARGET_ARCH=aarch64 ;;
+esac
+TARGET_TRIPLE=$TARGET_ARCH-windows-msvc
 
 CMAKE_ARGS=(
     -DCMAKE_BUILD_TYPE=RelWithDebInfo

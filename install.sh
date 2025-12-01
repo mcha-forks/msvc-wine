@@ -54,14 +54,14 @@ ln_s MSVC vc/tools/msvc
 # /DEFAULTLIB:"OLDNAMES", which lld-link doesn't find on a case sensitive
 # filesystem. Therefore add matching case symlinks for this, to allow
 # linking MSVC built objects with lld-link.
-cd $(echo vc/tools/msvc/* | awk '{print $1}')/lib
+cd "$(echo vc/tools/msvc/* | awk '{print $1}')"/lib
 for arch in x86 x64 arm arm64; do
     if [ ! -d "$arch" ]; then
         continue
     fi
     cd $arch
     for i in libcmt libcmtd msvcrt msvcrtd oldnames; do
-        ln_s $i.lib $(echo $i | tr [a-z] [A-Z]).lib
+        ln_s $i.lib "$(echo $i | tr '[:lower:]' '[:upper:]')".lib
     done
     cd ..
 done
@@ -83,9 +83,7 @@ cd bin
 # vctip.exe is known to cause problems at some times; just remove it.
 # See https://bugs.chromium.org/p/chromium/issues/detail?id=735226 and
 # https://github.com/mstorsjo/msvc-wine/issues/23 for references.
-for i in $(find . -iname vctip.exe); do
-    rm $i
-done
+find . -iname vctip.exe -exec rm {} \;
 if [ -d HostX64 ]; then
     # 15.x - 16.4
     mv HostX64 Hostx64
@@ -116,8 +114,8 @@ ln_s Lib lib
 ln_s Include include
 cd ../..
 
-SDKVER=$(basename $(echo kits/10/include/10.* | awk '{print $NF}'))
-echo Using SDK version $SDKVER
+SDKVER=$(basename "$(echo kits/10/include/10.* | awk '{print $NF}')")
+echo "Using SDK version $SDKVER"
 
 # Lowercase the SDK headers and libraries. As long as cl.exe is executed
 # within wine, this is mostly not necessary.
@@ -171,28 +169,38 @@ if [ "$(uname -m)" = "aarch64" ]; then
     dotnet_host=arm64
 fi
 
-NETFXVER=$(basename $(echo kits/NETFXSDK/* | awk '{print $NF}'))
-echo Using NETFX version $NETFXVER
+NETFXVER=$(basename "$(echo kits/NETFXSDK/* | awk '{print $NF}')")
+echo "Using NETFX version $NETFXVER"
 
-NETFXSDKVER=$(basename $(echo sdks/Windows/v* | awk '{print $NF}'))
-echo Using NETFX SDK version $NETFXSDKVER
+NETFXSDKVER=$(basename "$(echo sdks/Windows/v* | awk '{print $NF}')")
+echo "Using NETFX SDK version $NETFXSDKVER"
 
-MSVCVER=$(basename $(echo vc/tools/msvc/* | awk '{print $1}'))
-echo Using MSVC version $MSVCVER
+MSVCVER=$(basename "$(echo vc/tools/msvc/* | awk '{print $1}')")
+echo "Using MSVC version $MSVCVER"
 
 # Support `import std` for CMake.
 if [ -d "VC/Tools/MSVC/$MSVCVER/modules" ]; then
-    ln_s VC/Tools/MSVC/$MSVCVER/modules modules
+    ln_s "VC/Tools/MSVC/$MSVCVER/modules" modules
 fi
 
-cat "$ORIG"/wrappers/msvcenv.sh \
-| sed 's/MSVCVER=.*/MSVCVER='$MSVCVER/ \
-| sed 's/SDKVER=.*/SDKVER='$SDKVER/ \
-| sed 's/NETFXVER=.*/NETFXVER='$NETFXVER/ \
-| sed 's/NETFXSDKVER=.*/NETFXSDKVER='$NETFXSDKVER/ \
-| sed s/x64/$host/ \
-| sed s/amd64/$dotnet_host/ \
+sed \
+ -e "s/MSVCVER=.*/MSVCVER=$MSVCVER/" \
+ -e "s/SDKVER=.*/SDKVER=$SDKVER/" \
+ -e "s/NETFXVER=.*/NETFXVER=$NETFXVER/" \
+ -e "s/NETFXSDKVER=.*/NETFXSDKVER=$NETFXSDKVER/" \
+ -e s/x64/$host/ \
+ -e s/amd64/$dotnet_host/ \
+ "$ORIG"/wrappers/msvcenv.sh \
 > msvcenv.sh
+sed \
+ -e "s/MSVCVER=.*/MSVCVER=$MSVCVER/" \
+ -e "s/SDKVER=.*/SDKVER=$SDKVER/" \
+ -e "s/NETFXVER=.*/NETFXVER=$NETFXVER/" \
+ -e "s/NETFXSDKVER=.*/NETFXSDKVER=$NETFXSDKVER/" \
+ -e s/x64/$host/ \
+ -e s/amd64/$dotnet_host/ \
+ "$ORIG"/wrappers/msvcenv-native.sh \
+> msvcenv-native.sh
 
 for arch in x86 x64 arm arm64; do
     if [ ! -d "vc/tools/msvc/$MSVCVER/bin/Host$host/$arch" ]; then
@@ -200,16 +208,17 @@ for arch in x86 x64 arm arm64; do
     fi
     mkdir -p bin/$arch
     cp -a "$ORIG"/wrappers/* bin/$arch
-    cat msvcenv.sh | sed 's/ARCH=.*/ARCH='$arch/ > bin/$arch/msvcenv.sh
+    sed -e "s/ARCH=.*/ARCH=$arch/" msvcenv.sh > bin/$arch/msvcenv.sh
+    sed -e "s/ARCH=.*/ARCH=$arch/" msvcenv-native.sh > bin/$arch/msvcenv-native.sh
 done
 rm msvcenv.sh
+rm msvcenv-native.sh
 
 if [ -d "$DEST/bin/$host" ]; then
     if WINE="$(command -v wine64 || command -v wine)"; then
-        WINEDEBUG=-all "${WINE}" wineboot &>/dev/null
-        echo "Build msvctricks ..."
-        "$DEST/bin/$host/cl" /EHsc /O2 "$ORIG/msvctricks.cpp"
-        if [ $? -eq 0 ]; then
+        WINEDEBUG=-all "${WINE}" wineboot
+        echo "Build msvctricks ..." 
+        if "$DEST/bin/$host/cl" /EHsc /O2 "$ORIG/msvctricks.cpp"; then
             mv msvctricks.exe bin/
             rm msvctricks.obj
             echo "Build msvctricks done."
