@@ -53,7 +53,7 @@ FROM python:3.14-slim AS fetch-msvc
 WORKDIR /builddir
 COPY vsdownload.py ./
 
-RUN PYTHONUNBUFFERED=1 ./vsdownload.py --accept-license --only-download --cache cache --msvc-version=18.0 --sdk-version=10.0.26100 --with-wdk-installer wdk/Installers
+RUN PYTHONUNBUFFERED=1 ./vsdownload.py --accept-license --only-download --cache cache --major=18 --msvc-version=18.0 --sdk-version=10.0.26100 --with-wdk-installer wdk/Installers
 
 FROM wine AS builder
 
