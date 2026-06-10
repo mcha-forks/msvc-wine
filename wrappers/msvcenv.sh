@@ -22,6 +22,7 @@ BASE_UNIX=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
 if [ ! -d "$BASE_UNIX/vc" ]; then
     BASE_UNIX=$(cd "$BASE_UNIX"/.. && pwd)
 fi
+# FIXME: add an option to use winepath?
 BASE=z:${BASE_UNIX//\//\\}
 MSVCVER=14.13.26128
 SDKVER=10.0.16299.0
@@ -42,5 +43,6 @@ export INCLUDE="${INCLUDE:+$INCLUDE;}$MSVCDIR\\atlmfc\\include;$MSVCDIR\\include
 export LIB="${LIB:+$LIB;}$MSVCDIR\\atlmfc\\lib\\$ARCH;$MSVCDIR\\lib\\$ARCH;$SDKLIB\\ucrt\\$ARCH;$SDKLIB\\um\\$ARCH;$NETFXBASE\\lib"
 export LIBPATH="$LIB"
 # "$MSVCDIR\\bin\\Hostx64\\x64" is included in PATH for DLLs.
-export WINEPATH="${BINDIR//\//\\};${SDKBINDIR//\//\\};$MSVCDIR\\bin\\Hostx64\\x64"
+# FIXME: add an option to use winepath?
+export WINEPATH="z:${BINDIR//\//\\};z:${SDKBINDIR//\//\\};$MSVCDIR\\bin\\Hostx64\\x64"
 export WINEDLLOVERRIDES="vcruntime140=n;vcruntime140_1=n"
