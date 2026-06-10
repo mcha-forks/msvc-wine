@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
 # Copyright (c) 2019 Martin Storsjo
 #
@@ -15,6 +15,7 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 set -e
+shopt -s nullglob
 
 if [ $# -lt 1 ]; then
     echo "$0 {vc.zip sdk.zip target|target}"
@@ -49,18 +50,30 @@ ln_s VC vc
 ln_s Tools vc/tools
 ln_s MSVC vc/tools/msvc
 
-NETFXVER=$(basename $(echo kits/NETFXSDK/* | awk '{print $NF}'))
-echo Using NETFX version $NETFXVER
+netfxs=(kits/NETFXSDK/*)
+NETFXVER=${netfxs[0]#kits/NETFXSDK/}
+if ! [ -z "$NETFXVER" ]; then
+    echo "Using NETFX version $NETFXVER"
+fi
 
-NETFXSDKVER=$(basename $(echo sdks/Windows/v* | awk '{print $NF}'))
-echo Using NETFX SDK version $NETFXSDKVER
+netfxsdks=(sdks/Windows/v*)
+NETFXSDKVER=${netfxsdks[0]#sdks/Windows/v}
+if ! [ -z "$NETFXVER" ]; then
+    echo "Using NETFX SDK version $NETFXSDKVER"
+fi
 
-for i in $(ls -r vc/tools/msvc); do
-    dir="vc/tools/msvc/$i"
+msvcs=(vc/tools/msvc/*)
+msvcr=()
+for i in "${msvcs[@]}"
+do
+    msvcr=("$i" "${msvcr[@]}")
+done
+
+for dir in "${msvcr[@]}"; do
     # Iterate over versions, from highest to lowest, picking the first one
     # that seem to be complete enough (having bin, include and lib directories).
-    if [ -d $dir/bin ] && [ -d $dir/include ] && [ -d $dir/lib ]; then
-        MSVCVER="$i"
+    if [ -d "$dir/bin" ] && [ -d "$dir/include" ] && [ -d "$dir/lib" ]; then
+        MSVCVER="${dir#vc/tools/msvc/}"
         break
     fi
 done
@@ -68,7 +81,7 @@ if [ -z "$MSVCVER" ]; then
     echo No suitable MSVC version found
     exit 1
 fi
-echo Using MSVC version $MSVCVER
+echo "Using MSVC version $MSVCVER"
 
 # Add symlinks like LIBCMT.lib -> libcmt.lib. These are properly lowercased
 # out of the box, but MSVC produces directives like /DEFAULTLIB:"LIBCMT"
@@ -82,7 +95,7 @@ for arch in x86 x64 arm arm64; do
     fi
     cd $arch
     for i in libcmt libcmtd msvcrt msvcrtd oldnames; do
-        ln_s $i.lib $(echo $i | tr [a-z] [A-Z]).lib
+        ln_s $i.lib "$(echo $i | tr '[:lower:]' '[:upper:]')".lib
     done
     cd ..
 done
@@ -104,9 +117,7 @@ cd bin
 # vctip.exe is known to cause problems at some times; just remove it.
 # See https://bugs.chromium.org/p/chromium/issues/detail?id=735226 and
 # https://github.com/mstorsjo/msvc-wine/issues/23 for references.
-for i in $(find . -iname vctip.exe); do
-    rm $i
-done
+find . -iname vctip.exe -exec rm {} \;
 if [ -d HostX64 ]; then
     # 15.x - 16.4
     mv HostX64 Hostx64
@@ -137,8 +148,8 @@ ln_s Lib lib
 ln_s Include include
 cd ../..
 
-SDKVER=$(basename $(echo kits/10/include/10.* | awk '{print $NF}'))
-echo Using SDK version $SDKVER
+SDKVER=$(basename "$(echo kits/10/include/10.* | awk '{print $NF}')")
+echo "Using SDK version $SDKVER"
 
 # Lowercase the SDK headers and libraries. As long as cl.exe is executed
 # within wine, this is mostly not necessary.
@@ -194,17 +205,27 @@ fi
 
 # Support `import std` for CMake.
 if [ -d "VC/Tools/MSVC/$MSVCVER/modules" ]; then
-    ln_s VC/Tools/MSVC/$MSVCVER/modules modules
+    ln_s "VC/Tools/MSVC/$MSVCVER/modules" modules
 fi
 
-cat "$ORIG"/wrappers/msvcenv.sh \
-| sed 's/MSVCVER=.*/MSVCVER='$MSVCVER/ \
-| sed 's/SDKVER=.*/SDKVER='$SDKVER/ \
-| sed 's/NETFXVER=.*/NETFXVER='$NETFXVER/ \
-| sed 's/NETFXSDKVER=.*/NETFXSDKVER='$NETFXSDKVER/ \
-| sed s/x64/$host/ \
-| sed s/amd64/$dotnet_host/ \
+sed \
+ -e "s/MSVCVER=.*/MSVCVER=$MSVCVER/" \
+ -e "s/SDKVER=.*/SDKVER=$SDKVER/" \
+ -e "s/NETFXVER=.*/NETFXVER=$NETFXVER/" \
+ -e "s/NETFXSDKVER=.*/NETFXSDKVER=$NETFXSDKVER/" \
+ -e s/x64/$host/ \
+ -e s/amd64/$dotnet_host/ \
+ "$ORIG"/wrappers/msvcenv.sh \
 > msvcenv.sh
+sed \
+ -e "s/MSVCVER=.*/MSVCVER=$MSVCVER/" \
+ -e "s/SDKVER=.*/SDKVER=$SDKVER/" \
+ -e "s/NETFXVER=.*/NETFXVER=$NETFXVER/" \
+ -e "s/NETFXSDKVER=.*/NETFXSDKVER=$NETFXSDKVER/" \
+ -e s/x64/$host/ \
+ -e s/amd64/$dotnet_host/ \
+ "$ORIG"/wrappers/msvcenv-native.sh \
+> msvcenv-native.sh
 
 for arch in x86 x64 arm arm64; do
     if [ ! -f "vc/tools/msvc/$MSVCVER/bin/Host$host/$arch/cl.exe" ]; then
@@ -212,16 +233,17 @@ for arch in x86 x64 arm arm64; do
     fi
     mkdir -p bin/$arch
     cp -a "$ORIG"/wrappers/* bin/$arch
-    cat msvcenv.sh | sed 's/ARCH=.*/ARCH='$arch/ > bin/$arch/msvcenv.sh
+    sed -e "s/ARCH=.*/ARCH=$arch/" msvcenv.sh > bin/$arch/msvcenv.sh
+    sed -e "s/ARCH=.*/ARCH=$arch/" msvcenv-native.sh > bin/$arch/msvcenv-native.sh
 done
 rm msvcenv.sh
+rm msvcenv-native.sh
 
 if [ -d "$DEST/bin/$host" ]; then
     if WINE="$(command -v wine64 || command -v wine)"; then
-        WINEDEBUG=-all "${WINE}" wineboot &>/dev/null
-        echo "Build msvctricks ..."
-        "$DEST/bin/$host/cl" /EHsc /O2 "$ORIG/msvctricks.cpp"
-        if [ $? -eq 0 ]; then
+        WINEDEBUG=-all "${WINE}" wineboot
+        echo "Build msvctricks ..." 
+        if "$DEST/bin/$host/cl" /EHsc /O2 "$ORIG/msvctricks.cpp"; then
             mv msvctricks.exe bin/
             rm msvctricks.obj
             echo "Build msvctricks done."

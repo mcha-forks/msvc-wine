@@ -98,11 +98,10 @@ apt-get install -y python3 msitools ca-certificates
 ```
 
 To let Clang/LLD find the headers and libraries, source the `msvcenv-native.sh` script to set up the `INCLUDE`
-and `LIB` environment variables, with the `BIN` variable pointing at the relevant `bin` directory set up by
-`install.sh` above.
+and `LIB` environment variables.
 
 ```bash
-BIN=~/my_msvc/bin/x64 . ./msvcenv-native.sh
+. ~/my_msvc/bin/x64/msvcenv-native.sh
 ```
 
 After this, you can invoke `clang-cl`, `clang --target=<arch>-windows-msvc` or `lld-link` without needing to
